@@ -14,6 +14,23 @@ from urllib.parse import urlsplit
 from vnc_client import VncClient
 
 
+def load_env_file(path: Path = Path(__file__).resolve().parent / ".env") -> None:
+    """Manual runs only: credentials stay in the ignored .env, whatever terminal runs this."""
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip().removeprefix("export ") if hasattr(str, "removeprefix") else line.strip().replace("export ", "", 1)
+        if line and not line.startswith("#") and "=" in line:
+            name, value = line.split("=", 1)
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+                value = value[1:-1]
+            os.environ[name.strip()] = value  # A stale value exported in some terminal must not win.
+
+
+load_env_file()
+
+
 def websocket_url(desktop_url: str) -> str:
     parts = urlsplit(desktop_url)
     scheme = "ws" if parts.scheme in ("http", "ws") else "wss"
