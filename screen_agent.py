@@ -224,6 +224,7 @@ def run_task(task_id: str, tarea: str, url: str, password: str, store: Store, ll
                 metrics["escaladas"] += 1
                 log_event("LLM_ESCALATED", task_id=task_id, reason="screen_unchanged", step=step)
             mark = time.monotonic()
+            before = getattr(llm, "total_cost_usd", None)
             try:
                 answer = llm.ask_json(SYSTEM_PROMPT, json.dumps(prompt, ensure_ascii=False), model=model,
                                       task_spent_usd=metrics["costo_usd"], images_b64_png=[base64.b64encode(image).decode()],
@@ -231,7 +232,8 @@ def run_task(task_id: str, tarea: str, url: str, password: str, store: Store, ll
                 metrics["costo_usd"] += answer["cost_usd"]
                 raw_plan = answer["data"]
             except ValueError as exc:
-                metrics["costo_usd"] += CONFIG.max_call_reserve_usd
+                # The client already settled this reply's real price; only a stub without it needs the reserve.
+                metrics["costo_usd"] += (llm.total_cost_usd - before) if before is not None else CONFIG.max_call_reserve_usd
                 log_event("LLM_INVALID_REPLY", task_id=task_id, step=step, reason=type(exc).__name__, detail=str(exc)[:80])
                 feedback = "Tu respuesta anterior no era JSON válido o quedó cortada. Responde solo JSON y mantén pensamiento y progreso breves."
                 continue
