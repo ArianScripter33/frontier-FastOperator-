@@ -31,16 +31,25 @@ Las pruebas usan un escritorio falso y un modelo simulado: comprueban protocolo 
 ## Desplegar
 El `Dockerfile` sirve en cualquier host de contenedores. Define `OPENROUTER_API_KEY` y `FRONTIER_TEAM_TOKEN`. El servicio escucha en `PORT`.
 
-## Métricas Reales en Evaluación Oculta (Corrida 1 Oficial)
-- **Set Oculto Oficial:** 15 de 34 casos completados en la primera corrida oficial (`60% del set`, 6/10 fáciles, 6/14 regulares, 3/10 difíciles).
-- **Velocidad:** Mediana por caso de **1 min 18 s** (límite reglamentario de 5 min). Solo 2 casos agotados por tiempo de 34 evaluados.
-- **Eficiencia de Costo:** **0.296 USD en total** para evaluar los 34 escritorios remotos completos (~0.008 USD por tarea).
-- **Latencia de API:** `GET /health` responde en **196 ms**; `POST /tasks` responde en **<0.4 s** (límite <2.0 s).
+## Métricas Reales en Evaluación Oculta
+- **Corrida 1 Oficial (Línea Base Post-Incidente):** 15 de 34 tareas completadas (44.1% éxito: 6/10 fáciles, 6/14 regulares, 3/10 difíciles). Mediana de **1 min 18 s** y costo total de **0.296 USD** (~0.0085 USD por tarea).
+- **Corrida 2 Oficial (Con Parches de Exploración en Caliente):** 10 de las primeras 17 tareas completadas (**58.8% de éxito** en vivo). El tiempo medio subió a **127 s (~17 pasos)** debido a la exploración activa de pestañas y escaneo de tablas.
+- **Latencia de API:** `GET /health` responde en **196 ms**; `POST /tasks` responde en **<0.4 s** (límite reglamentario <2.0 s).
 
-## Resiliencia ante Incidente (Cambio de Tema en Caliente)
-A las 15:00 el cliente actualizó la aplicación a un tema nuevo con botones reubicados, etiquetas distintas y modales al inicio:
-- **Detección Automática de Deriva:** El bucle registra `APP_DRIFT_DETECTED` y purga rutas obsoletas en SQLite (`store.py`).
-- **Autonomía Visual:** Al operar con visión multimodal directa sin selectores CSS ni coordenadas fijas, el agente resolvió la tarea de prueba `E1` sobre el tema nuevo con oráculo verde en 15 pasos y 113.3 s (`0.0098 USD`).
+## Resiliencia ante Incidente (GUI Drift a las 15:00 h)
+A las 15:00 el entorno actualizó la aplicación a un tema de alto contraste con botones reubicados en pestañas secundarias y modales de bienvenida bloqueando el foco:
+- **Diagnóstico por Telemetría:** En la Corrida 1, 14 tareas abortaron tempranamente (paso ~3). Al no encontrar los controles en la vista raíz, el agente priorizó no clicar a ciegas antes de dañar registros.
+- **Adaptación en Caliente (`commit f3cbce6`):**
+  - *Regla 2:* Cierre preventivo de modales con botón de cierre o tecla `escape`.
+  - *Regla 4:* Exploración obligatoria de pestañas visibles cuando el control principal no está en el lienzo inicial.
+  - *Regla 9:* Búsqueda exhaustiva en tablas con scroll vertical antes de declarar fallo.
+  - *Manejo de Formularios:* Inyección de `BackSpace` (`0xFF08`) en `replace_text` para vaciar campos antes de escribir.
+
+## Arquitectura de Frontera e Investigación Experimental (Fork Aislado)
+En el entorno de evaluación adversarial (`tests/test_jev_hybrid.py`, 39/39 passing):
+- **TypeSafe JEV 1.14 (Oráculo Táctico):** Resolución nativa 1280×800 con header `TypeSafe-Danger-Zone-Images: true`. Latencia TTFT de **326.8 ms** (3.8x más rápido que Haiku) a **0.000015 USD** por decisión táctica.
+- **Claude Haiku 5.5 (Operador Motor Primario):** TTFT de **971.0 ms** con pixel grounding exacto y 100% de OCR sobre controles ERP densos.
+- **DeepSeek V4.1 Flash 1017 (Árbitro Semántico):** **2.14x más barato** en visión (0.000089 USD/turno), ideal para desempate semántico en pantallas estancadas, pero con varianza espacial (25-80 px) que descarta su uso para clics motores directos.
 
 ## Límites
 - Una tarea en curso se pierde si el servicio se reinicia.
