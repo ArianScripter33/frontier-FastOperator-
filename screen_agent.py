@@ -16,7 +16,7 @@ from config import CONFIG
 from llm_client import BudgetExceededError, OpenRouterClient
 from store import Store
 from telemetry import log_event
-from vnc_client import VncClient
+from vnc_client import DeadlineReached, VncClient
 
 MAX_RECENT_STEPS = 12
 MAX_NOTES_CHARS = 1500
@@ -191,6 +191,7 @@ def run_task(task_id: str, tarea: str, url: str, password: str, store: Store, ll
 
     try:
         client = client_factory(url, password)
+        client.stop_at = deadline
         progress: Dict[str, Any] = {"hecho": "", "falta": tarea, "datos": {}}
         recent: List[str] = []
         attempted_saves: List[str] = []
@@ -271,7 +272,7 @@ def run_task(task_id: str, tarea: str, url: str, password: str, store: Store, ll
                 done.append(_describe(action))
             recent.append(remove_secrets(f"p{step}: {'; '.join(done)} — {str(plan.get('pensamiento',''))[:120]}", secret_list))
         return fail("sin_pasos", "No terminé dentro del límite de pasos; no puedo confirmar el resultado.")
-    except Stopped:
+    except (Stopped, DeadlineReached):
         return fail("sin_tiempo", "Me detuve al llegar al límite de tiempo sin poder confirmar el resultado.")
     except BudgetExceededError:
         return fail("sin_presupuesto", "Me detuve al llegar al tope de costo por tarea sin poder confirmar el resultado.")

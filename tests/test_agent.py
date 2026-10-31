@@ -249,3 +249,14 @@ def test_service_contract(tmp_path, monkeypatch):
     assert http.get("/tasks/nada", headers=auth).status_code == 404
     assert http.post("/tasks", json={**body, "escritorio": {"url": "http://d", "password": "p"}}, headers=auth).status_code == 422
     assert http.get("/stats", headers=auth).json()["por_estado"] == {"terminada": 1}
+
+
+def test_typing_stops_when_task_time_ends(desktop):
+    from vnc_client import DeadlineReached
+    client = VncClient(desktop.url, PASSWORD)
+    client.stop_at = time.monotonic() - 1
+    with pytest.raises(DeadlineReached):
+        client.type_text("no debe llegar")
+    client.screenshot_png()
+    client.close()
+    assert not desktop.keys

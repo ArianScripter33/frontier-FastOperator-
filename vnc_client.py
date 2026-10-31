@@ -34,6 +34,10 @@ class VncError(RuntimeError):
     pass
 
 
+class DeadlineReached(VncError):
+    """The task's time ended mid-action: nothing more may reach the desktop."""
+
+
 def _vnc_auth_response(challenge: bytes, password: str) -> bytes:
     """VNC auth: DES of the challenge, with the password's key bits mirrored."""
     key = password.encode("latin-1", "replace")[:8].ljust(8, b"\0")
@@ -54,6 +58,7 @@ class VncClient:
     def __init__(self, url: str, password: str, timeout: float = 20.0) -> None:
         self._buffer = bytearray()
         self._timeout = timeout
+        self.stop_at = None  # Monotonic time after which typing stops, set by the task's owner.
         self._socket = ws_connect(url, subprotocols=["binary"], max_size=None, compression=None,
                                   open_timeout=timeout, close_timeout=2)
         try:
@@ -209,6 +214,8 @@ class VncClient:
 
     def type_text(self, text: str) -> None:
         for char in text:
+            if self.stop_at is not None and time.monotonic() >= self.stop_at:
+                raise DeadlineReached("Task time ended while typing")
             keysym = keysym_for(char)
             self._key(keysym, True)
             time.sleep(KEY_DELAY_SECONDS)

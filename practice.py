@@ -56,16 +56,21 @@ def main() -> None:
             oracle = True
         except urllib.error.HTTPError as exc:
             # Read-only tasks still say something without the oracle; never read this as a full pass.
-            print(f"AVISO: /__reset respondió {exc.code}: token del escritorio inválido. Sigo sin reset ni /__check.")
             oracle = False
+            if test["diff_esperado"]:
+                # A write without reset or oracle would dirty the desktop and prove nothing.
+                print(f"OMITIDA {test['id']}: /__reset respondió {exc.code} y esta tarea escribe.")
+                rows.append({"id": test["id"], "pass": False, "omitida": True, "costo_usd": 0.0})
+                continue
+            print(f"AVISO: /__reset respondió {exc.code}. {test['id']} no escribe: corre sin /__check y no cuenta como aprobada.")
         task_id = uuid.uuid4().hex
         store.create_task(task_id, test["instruccion"])
         outcome = run_task(task_id, test["instruccion"], url, os.environ["FRONTIER_DESKTOP_PASSWORD"], store, secrets=[token])
         app_check = call(base, "/__check", token, test) if oracle else {"pass": None, "checks": []}
         own = own_checks(test, outcome)
-        passed = (not oracle or bool(app_check.get("pass"))) and all(own.values())
+        passed = oracle and bool(app_check.get("pass")) and all(own.values())
         rows.append({"id": test["id"], "pass": passed, "app_check": app_check, "own": own, **outcome})
-        print(f"{'OK   ' if passed else 'FALLA'} {test['id']} · {outcome['estado']} · {outcome['pasos']} pasos · "
+        print(f"{'OK   ' if passed else ('SIN CHEQUEO' if not oracle else 'FALLA')} {test['id']} · {outcome['estado']} · {outcome['pasos']} pasos · "
               f"{outcome['segundos']} s · {outcome['costo_usd']:.4f} USD · modelo {outcome['segundos_modelo']:.0f} s · pantalla {outcome['segundos_pantalla']:.0f} s")
         print(f"      resumen: {outcome['resumen'][:300]!r}")
         print(f"      app: {[c['nombre'] for c in app_check.get('checks', []) if not c.get('ok')] or 'ok'} · propios: {own}")
