@@ -218,6 +218,8 @@ def run_task(task_id: str, tarea: str, url: str, password: str, store: Store, ll
                       "progreso": progress, "pasos_recientes": recent[-MAX_RECENT_STEPS:],
                       "guardados_ya_intentados": attempted_saves, "notas_app": store.notes_for(state["app"]) if state["app"] else [],
                       "aviso": feedback, "pantalla_sin_cambios": unchanged}
+            if unchanged >= 2:
+                prompt["aviso"] = "Tus últimas acciones no cambiaron la pantalla. Prueba otro control o coordenada, o termina como fallida."
             feedback = None
             # A stuck screen is what a stronger model is for; otherwise the cheap one decides.
             model = CONFIG.strong_model if unchanged >= 2 and metrics["escaladas"] < CONFIG.max_escalations else CONFIG.fast_model

@@ -26,7 +26,7 @@ class RuntimeConfig:
     task_seconds: float = float(os.environ.get("FRONTIER_TASK_SECONDS", "270"))  # Evaluator stops at 300.
     max_steps: int = 45
     max_actions_per_step: int = 6
-    max_escalations: int = 3
+    max_escalations: int = int(os.environ.get("FRONTIER_MAX_ESCALATIONS", "0"))  # Practice passed 5/5 on the fast model path; escalation cost 10x.
     max_cost_per_task_usd: float = 0.10
     max_run_budget_usd: float = 0.10  # One client per task, so this equals the task cap.
     request_timeout_sec: int = 25

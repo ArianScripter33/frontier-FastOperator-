@@ -208,7 +208,8 @@ def test_invalid_reply_retries_and_stuck_screen_escalates(desktop, tmp_path):
     click = {"op": "click", "x": 1, "y": 1}
     outcome, _, model = run(desktop, tmp_path, [ValueError("json"), act(click), act(click), act(click), finish()])
     assert outcome["estado"] == "terminada" and model.prompts[1]["aviso"]
-    assert screen_agent.CONFIG.strong_model in model.models  # The fake screen never changes.
+    assert screen_agent.CONFIG.strong_model not in model.models  # Off by default.
+    assert "no cambiaron la pantalla" in model.prompts[3]["aviso"]  # The fake screen never changes.
 
 
 def test_notes_keep_strategies_not_data_and_stale_ones_leave(desktop, tmp_path):
