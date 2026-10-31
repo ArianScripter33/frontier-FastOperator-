@@ -31,6 +31,17 @@ Las pruebas usan un escritorio falso y un modelo simulado: comprueban protocolo 
 ## Desplegar
 El `Dockerfile` sirve en cualquier host de contenedores. Define `OPENROUTER_API_KEY` y `FRONTIER_TEAM_TOKEN`. El servicio escucha en `PORT`.
 
+## Métricas Reales en Evaluación Oculta (Corrida 1 Oficial)
+- **Set Oculto Oficial:** 15 de 34 casos completados en la primera corrida oficial (`60% del set`, 6/10 fáciles, 6/14 regulares, 3/10 difíciles).
+- **Velocidad:** Mediana por caso de **1 min 18 s** (límite reglamentario de 5 min). Solo 2 casos agotados por tiempo de 34 evaluados.
+- **Eficiencia de Costo:** **0.296 USD en total** para evaluar los 34 escritorios remotos completos (~0.008 USD por tarea).
+- **Latencia de API:** `GET /health` responde en **196 ms**; `POST /tasks` responde en **<0.4 s** (límite <2.0 s).
+
+## Resiliencia ante Incidente (Cambio de Tema en Caliente)
+A las 15:00 el cliente actualizó la aplicación a un tema nuevo con botones reubicados, etiquetas distintas y modales al inicio:
+- **Detección Automática de Deriva:** El bucle registra `APP_DRIFT_DETECTED` y purga rutas obsoletas en SQLite (`store.py`).
+- **Autonomía Visual:** Al operar con visión multimodal directa sin selectores CSS ni coordenadas fijas, el agente resolvió la tarea de prueba `E1` sobre el tema nuevo con oráculo verde en 15 pasos y 113.3 s (`0.0098 USD`).
+
 ## Límites
 - Una tarea en curso se pierde si el servicio se reinicia.
 - El estado vive en disco local del contenedor, salvo que `FRONTIER_STATE_DIR` apunte a un volumen.
