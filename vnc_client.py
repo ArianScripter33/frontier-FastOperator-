@@ -26,6 +26,7 @@ KEYSYMS = {
     "left": 0xFF51, "up": 0xFF52, "right": 0xFF53, "down": 0xFF54,
     "pageup": 0xFF55, "pagedown": 0xFF56, "space": 0x20,
     "ctrl": 0xFFE3, "shift": 0xFFE1, "alt": 0xFFE9,
+    **{f"f{number}": 0xFFBD + number for number in range(1, 13)},
 }
 BUTTON_MASK = {"left": 1, "middle": 2, "right": 4}
 
@@ -52,6 +53,11 @@ def keysym_for(char: str) -> int:
     if char == "\t":
         return KEYSYMS["tab"]
     return code if code <= 0xFF else 0x01000000 | code
+
+
+def valid_combo(combo: str) -> bool:
+    names = [name.strip().lower() for name in combo.split("+")]
+    return 1 <= len(names) <= 4 and all(name in KEYSYMS or len(name) == 1 for name in names)
 
 
 class VncClient:
@@ -204,11 +210,15 @@ class VncClient:
     def press(self, combo: str) -> None:
         """Press a key or a combination such as `enter` or `ctrl+a`."""
         names = [name.strip().lower() for name in combo.split("+")]
+        if self.stop_at is not None and time.monotonic() >= self.stop_at:
+            raise DeadlineReached("Task time ended before a key press")
+        if not valid_combo(combo):
+            raise VncError("Unknown key combination")
         keysyms = [KEYSYMS[name] if name in KEYSYMS else keysym_for(name) for name in names]
         for keysym in keysyms:
             self._key(keysym, True)
             time.sleep(KEY_DELAY_SECONDS)
-        for keysym in reversed(keysyms):
+        for keysym in reversed(keysyms):  # Always released: a stuck Ctrl would corrupt later typing.
             self._key(keysym, False)
             time.sleep(KEY_DELAY_SECONDS)
 

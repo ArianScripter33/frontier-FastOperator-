@@ -276,6 +276,8 @@ class OpenRouterClient:
             "max_tokens": CONFIG.max_output_tokens,
             "provider": {"zdr": CONFIG.require_zdr, "data_collection": "deny"},
             "usage": {"include": True},
+            # Reasoning shares max_tokens with the reply; unbounded, it can leave the reply empty.
+            **({"reasoning": {"effort": CONFIG.reasoning_effort}} if CONFIG.reasoning_effort else {}),
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content},
@@ -329,6 +331,8 @@ class OpenRouterClient:
                 raise ValueError("Model content must be text")
         except (KeyError, IndexError, TypeError) as exc:
             raise ValueError("Malformed chat response envelope") from exc
+        if not content.strip():
+            raise ValueError(f"Empty model reply, finish_reason={raw['choices'][0].get('finish_reason')}")
         parsed = parse_json_loose(content)
         log_event(
             "LLM_CALL_COMPLETED",

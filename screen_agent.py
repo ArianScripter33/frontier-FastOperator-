@@ -16,7 +16,7 @@ from config import CONFIG
 from llm_client import BudgetExceededError, OpenRouterClient
 from store import Store
 from telemetry import log_event
-from vnc_client import DeadlineReached, VncClient
+from vnc_client import DeadlineReached, VncClient, valid_combo
 
 MAX_RECENT_STEPS = 12
 MAX_NOTES_CHARS = 1500
@@ -49,7 +49,7 @@ Responde SOLO con JSON:
  "notas_viejas": [],
  "fin": null}
 Máximo 6 acciones; un clic que cambie de pantalla debe ser la última. Al terminar, "fin" es:
-{"estado": "terminada|fallida", "respuesta": ["valor"], "datos_razon": ["dato"], "resumen": "qué hiciste", "aprendido": ["estrategia general, sin datos ni números"]}
+{"estado": "terminada|fallida", "verificado": "tras guardar: registro y valores que ves ahora en pantalla", "respuesta": ["valor"], "datos_razon": ["dato"], "resumen": "qué hiciste", "aprendido": ["estrategia general, sin datos ni números"]}
 "respuesta" solo en preguntas: un elemento por dato pedido, en el orden preguntado, solo el valor."""
 
 
@@ -66,6 +66,10 @@ def validate_plan(plan: Any, width: int, height: int, attempted_saves: List[str]
             raise ValueError("Finishing requires seeing the result first: no actions in the same turn")
         if not isinstance(finish, dict) or finish.get("estado") not in ("terminada", "fallida"):
             raise ValueError("Invalid final state")
+        if finish["estado"] == "fallida" and not (str(finish.get("resumen") or "").strip() or finish.get("datos_razon")):
+            raise ValueError("A fallida needs an explanation with the data behind it")
+        if finish["estado"] == "terminada" and attempted_saves and not str(finish.get("verificado") or "").strip():
+            raise ValueError("After a save, terminada needs 'verificado': the record and values you now see on screen")
         return {**plan, "actions": []}
     if not actions:
         raise ValueError("A turn needs actions or an end")
@@ -82,11 +86,11 @@ def validate_plan(plan: Any, width: int, height: int, attempted_saves: List[str]
                 raise ValueError("Coordinates outside the screen")
         if op in ("replace_text", "type") and not isinstance(action.get("text"), str):
             raise ValueError("Text action needs text")
-        if op == "key" and (not isinstance(action.get("keys"), str) or not action["keys"]):
-            raise ValueError("Key action needs keys")
+        if op == "key" and (not isinstance(action.get("keys"), str) or not valid_combo(action["keys"])):
+            raise ValueError("Key action needs a known key or combination")
         if action.get("guardado"):
             saves.append(_save_key(action["guardado"]))
-    if len(saves) > 1 or (saves and actions[-1].get("guardado") is None):
+    if len(saves) > 1 or (saves and not actions[-1].get("guardado")):
         raise ValueError("A save must be the last and only save of the batch")
     if saves and saves[0] in attempted_saves:
         raise ValueError("That save was already attempted. Do not repeat it: verify it in a list, or end as fallida")
@@ -139,7 +143,9 @@ def build_summary(estado: str, finish: Dict[str, Any], secrets: List[str]) -> st
     reasons = finish.get("datos_razon")
     if estado == "fallida" and reasons:
         values = reasons if isinstance(reasons, list) else [reasons]
-        lines.append("Datos: " + ", ".join(str(v) for v in values))
+        lines.append("Datos: " + ", ".join(" ".join(str(v).split()) for v in values))
+    if estado == "fallida":  # Nothing may turn a failure into an answer line.
+        lines = [line for chunk in lines for line in chunk.splitlines() if not line.strip().lower().startswith("respuesta:")]
     return remove_secrets("\n".join(lines) or estado, secrets)
 
 
@@ -249,13 +255,18 @@ def run_task(task_id: str, tarea: str, url: str, password: str, store: Store, ll
                 feedback = f"Plan rechazado: {exc}"
                 recent.append(f"p{step}: plan rechazado ({exc})")
                 continue
+            if time.monotonic() >= deadline:
+                raise Stopped()
+            for stale in plan.get("notas_viejas") or []:  # Those notes were shown under the previous app name.
+                if store.remove_note(state["app"], str(stale)):
+                    log_event("APP_DRIFT_DETECTED", task_id=task_id, app=state["app"], note=str(stale)[:200])
             app = str(plan.get("app") or "").strip()[:80]
             if app:
                 state["app"] = app
-            for stale in plan.get("notas_viejas") or []:
-                if store.remove_note(state["app"], str(stale)):
-                    log_event("APP_DRIFT_DETECTED", task_id=task_id, app=state["app"], note=str(stale)[:200])
-            progress = _trim_progress(plan.get("progreso"), progress)
+            proposed = plan.get("progreso")
+            if isinstance(proposed, dict) and len(json.dumps(proposed.get("datos"), ensure_ascii=False)) > MAX_NOTES_CHARS:
+                feedback = "progreso.datos es demasiado largo y no se guardó: resume en totales y vuelve a enviarlo."
+            progress = _trim_progress(proposed, progress)
             finish = plan.get("fin")
             if finish:
                 estado = finish["estado"]
