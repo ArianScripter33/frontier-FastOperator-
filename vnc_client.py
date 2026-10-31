@@ -29,6 +29,7 @@ KEYSYMS = {
     **{f"f{number}": 0xFFBD + number for number in range(1, 13)},
 }
 BUTTON_MASK = {"left": 1, "middle": 2, "right": 4}
+SCROLL_MASK = {"up": 8, "down": 16, "left": 32, "right": 64}
 
 
 class VncError(RuntimeError):
@@ -196,7 +197,7 @@ class VncClient:
         self.click(x, y)
 
     def scroll(self, x: int, y: int, direction: str, amount: int = 3) -> None:
-        mask = 8 if direction == "up" else 16  # Wheel buttons 4 and 5.
+        mask = SCROLL_MASK[direction]  # Wheel buttons 4 to 7.
         self._pointer(x, y)
         for _ in range(amount):
             self._pointer(x, y, mask)
@@ -237,6 +238,8 @@ class VncClient:
         self.click(x, y)
         time.sleep(0.2)
         self.press("ctrl+a")
+        time.sleep(0.1)
+        self.press("backspace")  # Also empties a field when the new text is empty.
         time.sleep(0.1)
         self.type_text(text)
 

@@ -148,7 +148,7 @@ def test_replace_text_selects_all_before_typing(desktop):
     client.close()
     time.sleep(0.05)
     pressed = [k[1] for k in desktop.keys if k[0]]
-    assert pressed == [0xFFE3, ord("a"), ord("ñ")]
+    assert pressed == [0xFFE3, ord("a"), 0xFF08, ord("ñ")]
 
 
 def test_task_acts_then_verifies_and_reports(desktop, tmp_path):

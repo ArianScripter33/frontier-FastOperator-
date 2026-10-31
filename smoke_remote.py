@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Run by hand: proves the deployed service works, without spending an official run.
+"""Check the deployed service without spending an official evaluation run.
 
-  python3 smoke_remote.py https://your-service.example
-Needs FRONTIER_TEAM_TOKEN, FRONTIER_DESKTOP_URL and FRONTIER_DESKTOP_PASSWORD (.env is loaded).
+Uses the practice desktop: never run alongside practice.py or another operator.
 """
+import argparse
 import json
 import os
-import sys
+from pathlib import Path
+import re
 import time
 import urllib.request
 
@@ -17,28 +18,67 @@ def call(base, path, token=None, body=None):
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    request = urllib.request.Request(base + path, headers=headers, data=json.dumps(body).encode() if body else None)
+    request = urllib.request.Request(base + path, headers=headers,
+        data=json.dumps(body).encode() if body is not None else None)
     with urllib.request.urlopen(request, timeout=30) as response:
         return response.status, json.loads(response.read().decode())
 
 
-def main():
-    base = sys.argv[1].rstrip("/")
+def correct_answer(state, expected):
+    if state.get("estado") != "terminada":
+        return False
+    lines = re.findall(r"^respuesta:\s*(.*)$", state.get("resumen", ""), re.M | re.I)
+    if len(lines) != 1:
+        return False
+    numbers = re.findall(r"[-+]?\d+(?:[.,]\d+)?", lines[0])
+    return bool(numbers) and numbers[0] == str(expected)
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("url", help="Public service URL, e.g. https://your-service.onrender.com")
+    args = parser.parse_args(argv)
+    base = args.url.rstrip("/")
+    if not base.startswith("https://"):
+        parser.error("Use the public HTTPS URL")
+    required = ("FRONTIER_TEAM_TOKEN", "FRONTIER_DESKTOP_URL", "FRONTIER_DESKTOP_PASSWORD")
+    missing = [name for name in required if not os.environ.get(name)]
+    if missing:
+        parser.error("Missing local configuration: " + ", ".join(missing))
     token = os.environ["FRONTIER_TEAM_TOKEN"]
-    print("health:", call(base, "/health"))
-    task = json.load(open("pruebas/E3-facturas-vencidas.json", encoding="utf-8"))
+    health_code, health = call(base, "/health", token)
+    print("health:", (health_code, health), flush=True)
+    if health_code != 200 or health.get("ok") is not True:
+        print("FALLA: servicio no disponible", flush=True)
+        return 1
+    task = json.loads((Path(__file__).parent / "pruebas/E3-facturas-vencidas.json").read_text(encoding="utf-8"))
     started = time.monotonic()
-    _, created = call(base, "/tasks", token, {"tarea": task["instruccion"], "escritorio": {
-        "url": websocket_url(os.environ["FRONTIER_DESKTOP_URL"]), "password": os.environ["FRONTIER_DESKTOP_PASSWORD"]}})
-    print(f"POST /tasks: {time.monotonic() - started:.2f} s")
-    while time.monotonic() - started < 300:
-        time.sleep(5)
-        _, state = call(base, f"/tasks/{created['task_id']}", token)
-        if state["estado"] != "en_curso":
-            print(f"{state['estado']} en {time.monotonic() - started:.0f} s:", state["resumen"].splitlines()[:1])
-            return
-    print("Sin terminar a los 5 minutos")
+    code, created = call(base, "/tasks", token, {"tarea": task["instruccion"], "escritorio": {
+        "url": websocket_url(os.environ["FRONTIER_DESKTOP_URL"]),
+        "password": os.environ["FRONTIER_DESKTOP_PASSWORD"]}})
+    accept_seconds = time.monotonic() - started
+    task_id = created.get("task_id")
+    if code not in (200, 201, 202) or not isinstance(task_id, str) or not task_id:
+        print("FALLA: contrato de aceptación inválido; no reintentar automáticamente", flush=True)
+        return 1
+    print(f"POST /tasks: {accept_seconds:.2f} s; task_id: {task_id}", flush=True)
+    if accept_seconds >= 2:
+        print("FALLA: aceptación fuera de plazo; sigo consultando la misma tarea, sin reenviarla", flush=True)
+    deadline = started + 300
+    while time.monotonic() < deadline:
+        time.sleep(min(5, max(0, deadline - time.monotonic())))
+        if time.monotonic() >= deadline:
+            break
+        _, state = call(base, f"/tasks/{task_id}", token)
+        if state.get("estado") != "en_curso":
+            elapsed = time.monotonic() - started
+            passed = accept_seconds < 2 and elapsed < 300 and correct_answer(state, task["respuesta_esperada"])
+            # Print no model-authored summary: it can contain secrets or irrelevant numbers.
+            print(f"{'OK' if passed else 'FALLA'} · estado={state.get('estado')} · {elapsed:.1f} s · respuesta esperada {'confirmada' if passed else 'no confirmada'}", flush=True)
+            return 0 if passed else 1
+    print("FALLA: sin resultado confirmado antes de cinco minutos; no reintentar ni usar el escritorio hasta confirmar el cese del worker", flush=True)
+    return 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
