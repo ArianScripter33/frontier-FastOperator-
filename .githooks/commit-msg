@@ -1,0 +1,9 @@
+#!/usr/bin/env python3
+import os
+from pathlib import Path
+import sys
+p={'claude':'🎃 Claude: ', 'codex':'🔵 Codex: ', 'gemini':'🟢 Gemini: '}
+subject=Path(sys.argv[1]).read_text().splitlines()[0]
+agent=os.environ.get('SCION_AGENT')
+if not any(subject.startswith(s) for s in p.values()) or (agent and not subject.startswith(p.get(agent,'INVALID'))):
+    sys.exit('Usa python3 tools/team.py commit {claude,codex,gemini} "mensaje" archivo...')

@@ -1,0 +1,15 @@
+.env
+.env.*
+.venv/
+.runtime/
+.opnscn/
+__pycache__/
+*.pyc
+memory*.json
+events.jsonl
+*.log
+*.key
+*.pem
+.DS_Store
+CURRENT_PHASE_PROMPT.md
+.claude/
