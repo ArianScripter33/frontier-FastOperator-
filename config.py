@@ -31,7 +31,7 @@ class RuntimeConfig:
     max_run_budget_usd: float = 0.10  # One client per task, so this equals the task cap.
     request_timeout_sec: int = 25
     llm_total_timeout_sec: float = 45.0
-    max_output_tokens: int = 1200
+    max_output_tokens: int = 2500
     max_call_reserve_usd: float = 0.01
     business_rules: Dict[str, object] = field(default_factory=dict)
 

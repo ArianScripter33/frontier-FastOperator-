@@ -41,7 +41,7 @@ Reglas:
 Responde SOLO con JSON:
 {"app": "nombre visible de la aplicación",
  "pensamiento": "una frase",
- "progreso": {"hecho": "qué ya se logró", "falta": "qué falta", "datos": {}},
+ "progreso": {"hecho": "qué ya se logró (breve)", "falta": "qué falta (breve)", "datos": {"solo": "totales y valores necesarios"}},
  "actions": [{"op": "click|double_click|right_click", "x": 0, "y": 0, "guardado": null},
              {"op": "replace_text", "x": 0, "y": 0, "text": ""},
              {"op": "type", "text": ""}, {"op": "key", "keys": "enter", "guardado": null},
@@ -195,6 +195,7 @@ def run_task(task_id: str, tarea: str, url: str, password: str, store: Store, ll
         recent: List[str] = []
         attempted_saves: List[str] = []
         unchanged = 0
+        acted = False
         last_screen = None
         feedback = None
         for step in range(1, CONFIG.max_steps + 1):
@@ -205,7 +206,12 @@ def run_task(task_id: str, tarea: str, url: str, password: str, store: Store, ll
             image = client.settled_screenshot(deadline) if step > 1 else client.screenshot_png()
             metrics["segundos_pantalla"] += time.monotonic() - mark
             screen = hashlib.blake2b(image, digest_size=16).digest()
-            unchanged = unchanged + 1 if screen == last_screen else 0
+            # Only an action can leave a screen "stuck"; a rejected or unreadable reply did nothing to it.
+            if screen != last_screen:
+                unchanged = 0
+            elif acted:
+                unchanged += 1
+            acted = False
             last_screen = screen
             prompt = {"tarea": tarea, "paso": step, "segundos_restantes": int(deadline - time.monotonic()),
                       "progreso": progress, "pasos_recientes": recent[-MAX_RECENT_STEPS:],
@@ -226,8 +232,8 @@ def run_task(task_id: str, tarea: str, url: str, password: str, store: Store, ll
                 raw_plan = answer["data"]
             except ValueError as exc:
                 metrics["costo_usd"] += CONFIG.max_call_reserve_usd
-                log_event("LLM_INVALID_REPLY", task_id=task_id, step=step, reason=type(exc).__name__)
-                feedback = "Tu respuesta anterior no era JSON válido."
+                log_event("LLM_INVALID_REPLY", task_id=task_id, step=step, reason=type(exc).__name__, detail=str(exc)[:80])
+                feedback = "Tu respuesta anterior no era JSON válido o quedó cortada. Responde solo JSON y mantén pensamiento y progreso breves."
                 continue
             finally:
                 metrics["segundos_modelo"] += time.monotonic() - mark
@@ -259,6 +265,7 @@ def run_task(task_id: str, tarea: str, url: str, password: str, store: Store, ll
                     attempted_saves.append(_save_key(action["guardado"]))
                     log_event("SAVE_ATTEMPTED", task_id=task_id, step=step, label=_save_key(action["guardado"]))
                 perform(client, action)
+                acted = True
                 done.append(_describe(action))
             recent.append(remove_secrets(f"p{step}: {'; '.join(done)} — {str(plan.get('pensamiento',''))[:120]}", secret_list))
         return fail("sin_pasos", "No terminé dentro del límite de pasos; no puedo confirmar el resultado.")
