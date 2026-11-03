@@ -32,13 +32,18 @@ Las pruebas usan un escritorio falso y un modelo simulado: comprueban protocolo 
 El `Dockerfile` sirve en cualquier host de contenedores. Define `OPENROUTER_API_KEY` y `FRONTIER_TEAM_TOKEN`. El servicio escucha en `PORT`.
 
 ## Métricas Reales en Evaluación Oculta
-- **Corrida 1 Oficial (Línea Base Post-Incidente):** 15 de 34 tareas completadas (44.1% éxito: 6/10 fáciles, 6/14 regulares, 3/10 difíciles). Mediana de **1 min 18 s** y costo total de **0.296 USD** (~0.0085 USD por tarea).
-- **Corrida 2 Oficial (Con Parches de Exploración en Caliente):** 10 de las primeras 17 tareas completadas (**58.8% de éxito** en vivo). El tiempo medio subió a **127 s (~17 pasos)** debido a la exploración activa de pestañas y escaneo de tablas.
-- **Latencia de API:** `GET /health` responde en **196 ms**; `POST /tasks` responde en **<0.4 s** (límite reglamentario <2.0 s).
+Set oculto de 42 tareas, en una aplicación no vista antes. Se usaron 2 de las 3 corridas.
+- **Resultado final:** **28 de 42** tareas completadas (**66.7%**). Fáciles 12/13 (92%), regulares 12/17 (71%), difíciles 4/12 (33%).
+- **Tiempo:** mediana de **1 min 29 s** por tarea, con un límite de 5 min.
+- **Fallos según el portal:** estado reportado incorrecto (8), cambios esperados no hechos (7), respuesta o razón incorrecta (4).
+- **Cifras retiradas:** las cifras intermedias que este README citaba (15 de 34, y 10 de 17 "en vivo") no coinciden con el resultado final. No deben citarse como oficiales.
+- **Costo total de las corridas:** no medido en este repositorio.
+- **Latencia:** `POST /tasks` respondió en 0.37 s en la prueba remota (límite: 2 s).
+- **Práctica local:** 5 de 5 según `/__check` antes del incidente (`evidencia/practica_pre_incidente.json`). Después del incidente solo se volvió a correr E1, que pasó; el resto no se volvió a medir.
 
 ## Resiliencia ante Incidente (GUI Drift a las 15:00 h)
 A las 15:00 el entorno actualizó la aplicación a un tema de alto contraste con botones reubicados en pestañas secundarias y modales de bienvenida bloqueando el foco:
-- **Diagnóstico por Telemetría:** En la Corrida 1, 14 tareas abortaron tempranamente (paso ~3). Al no encontrar los controles en la vista raíz, el agente priorizó no clicar a ciegas antes de dañar registros.
+- **Diagnóstico por Telemetría:** En la primera corrida, la telemetría intermedia registró 14 tareas abortadas cerca del paso 3. Al no encontrar los controles en la vista raíz, el agente priorizó no clicar a ciegas antes de dañar registros.
 - **Adaptación en Caliente (`commit f3cbce6`):**
   - *Regla 2:* Cierre preventivo de modales con botón de cierre o tecla `escape`.
   - *Regla 4:* Exploración obligatoria de pestañas visibles cuando el control principal no está en el lienzo inicial.
@@ -46,7 +51,7 @@ A las 15:00 el entorno actualizó la aplicación a un tema de alto contraste con
   - *Manejo de Formularios:* Inyección de `BackSpace` (`0xFF08`) en `replace_text` para vaciar campos antes de escribir.
 
 ## Arquitectura de Frontera e Investigación Experimental (Fork Aislado)
-En el entorno de evaluación adversarial (`tests/test_jev_hybrid.py`, 39/39 passing):
+**No desplegado.** Esta sección describe un fork aparte que no corrió en el set oculto. Este repositorio tiene JEV apagado por defecto (`FRONTIER_USE_JEV=0`) y el operador es Claude Haiku 5.5. La prueba que cita, `tests/test_jev_hybrid.py`, está en ese fork, no aquí. Cifras reportadas por el fork (no reproducidas en este repositorio):
 - **TypeSafe JEV 1.14 (Oráculo Táctico):** Resolución nativa 1280×800 con header `TypeSafe-Danger-Zone-Images: true`. Latencia TTFT de **326.8 ms** (3.8x más rápido que Haiku) a **0.000015 USD** por decisión táctica.
 - **Claude Haiku 5.5 (Operador Motor Primario):** TTFT de **971.0 ms** con pixel grounding exacto y 100% de OCR sobre controles ERP densos.
 - **DeepSeek V4.1 Flash 1017 (Árbitro Semántico):** **2.14x más barato** en visión (0.000089 USD/turno), ideal para desempate semántico en pantallas estancadas, pero con varianza espacial (25-80 px) que descarta su uso para clics motores directos.
@@ -54,7 +59,7 @@ En el entorno de evaluación adversarial (`tests/test_jev_hybrid.py`, 39/39 pass
 ## Límites
 - Una tarea en curso se pierde si el servicio se reinicia.
 - El estado vive en disco local del contenedor, salvo que `FRONTIER_STATE_DIR` apunte a un volumen.
-- La adaptación a otras apps no está demostrada: solo se ha probado sobre la app de práctica.
+- Con 28 de 42 en el set oculto, el agente no resuelve todas las tareas de una aplicación nueva. Las difíciles fueron 4 de 12.
 - CAPTCHAs externos quedan fuera.
 
 ## Procedencia
