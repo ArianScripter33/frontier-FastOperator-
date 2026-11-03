@@ -32,18 +32,18 @@ Las pruebas usan un escritorio falso y un modelo simulado: comprueban protocolo 
 El `Dockerfile` sirve en cualquier host de contenedores. Define `OPENROUTER_API_KEY` y `FRONTIER_TEAM_TOKEN`. El servicio escucha en `PORT`.
 
 ## Métricas Reales en Evaluación Oculta
-Set oculto de 42 tareas, en una aplicación no vista antes. Se usaron 2 de las 3 corridas.
-- **Resultado final:** **28 de 42** tareas completadas (**66.7%**). Fáciles 12/13 (92%), regulares 12/17 (71%), difíciles 4/12 (33%).
-- **Tiempo:** mediana de **1 min 29 s** por tarea, con un límite de 5 min.
-- **Fallos según el portal:** estado reportado incorrecto (8), cambios esperados no hechos (7), respuesta o razón incorrecta (4).
-- **Cifras retiradas:** las cifras intermedias que este README citaba (15 de 34, y 10 de 17 "en vivo") no coinciden con el resultado final. No deben citarse como oficiales.
-- **Costo total de las corridas:** no medido en este repositorio.
-- **Latencia:** `POST /tasks` respondió en 0.37 s en la prueba remota (límite: 2 s).
+Set oculto en una aplicación no vista antes. Se usaron 2 de las 3 corridas: la 1 tuvo 34 tareas y la 2, 42.
+- **Corrida 2 (final):** **28 de 42** tareas completadas (**66.7%**). Fáciles 12/13 (92%), regulares 12/17 (71%), difíciles 4/12 (33%). Mediana de **1 min 29 s** por tarea, con un límite de 5 min.
+- **Corrida 1:** **15 de 34** (44.1%). Fáciles 6/10, regulares 6/14, difíciles 3/10. Mediana de 1 min 18 s. Arrancó a las 15:23, después del incidente y antes de adaptar el agente.
+- **Fallos según el portal (estado reportado · cambios esperados · respuesta o razón):** corrida 1: 14 · 11 · 7; corrida 2: 8 · 7 · 4.
+- **Costo según `/stats` del servicio:** 0.30 USD en la corrida 1 y 0.40 USD en la corrida 2 (a las 18:12, con una tarea aún en curso).
+- **Cifra retirada:** "10 de 17 en vivo" era un parcial de la corrida 2, no un resultado.
+- **Latencia:** el portal midió `GET /health` en 196 ms al validar (15:23). `POST /tasks` respondió en 0.37 s en la prueba remota (límite: 2 s).
 - **Práctica local:** 5 de 5 según `/__check` antes del incidente (`evidencia/practica_pre_incidente.json`). Después del incidente solo se volvió a correr E1, que pasó; el resto no se volvió a medir.
 
 ## Resiliencia ante Incidente (GUI Drift a las 15:00 h)
 A las 15:00 el entorno actualizó la aplicación a un tema de alto contraste con botones reubicados en pestañas secundarias y modales de bienvenida bloqueando el foco:
-- **Diagnóstico por Telemetría:** En la primera corrida, la telemetría intermedia registró 14 tareas abortadas cerca del paso 3. Al no encontrar los controles en la vista raíz, el agente priorizó no clicar a ciegas antes de dañar registros.
+- **Diagnóstico por Telemetría:** en la corrida 1, el agente se declaró fallido en 17 tareas (según `/stats`); en la corrida 2, ya con el parche, en 10. La hipótesis fue que, sin encontrar los controles en la vista raíz, prefería no hacer clic a ciegas antes que dañar registros.
 - **Adaptación en Caliente (`commit f3cbce6`):**
   - *Regla 2:* Cierre preventivo de modales con botón de cierre o tecla `escape`.
   - *Regla 4:* Exploración obligatoria de pestañas visibles cuando el control principal no está en el lienzo inicial.
